@@ -21,7 +21,6 @@ export default class HwClashVpnExtension extends VpnExtensionAbility {
       const runtimeConfig = await PreferencesUtil.loadRuntimeConfig();
       if (runtimeConfig === '') {
         hilog.error(0x0000, TAG, 'No runtime config, abort VPN creation');
-        this.context.terminateSelf();
         return;
       }
 
@@ -37,7 +36,7 @@ export default class HwClashVpnExtension extends VpnExtensionAbility {
           {
             interface: 'vpn-tun',
             destination: { address: { address: '0.0.0.0', family: 1 }, prefixLength: 0 },
-            gateway: { address: { address: '0.0.0.0', family: 1 } },
+            gateway: { address: '0.0.0.0', family: 1 },
             hasGateway: false,
             isDefaultRoute: true
           }
@@ -61,7 +60,6 @@ export default class HwClashVpnExtension extends VpnExtensionAbility {
       const err = error as BusinessError;
       hilog.error(0x0000, TAG, 'Create VPN failed: %{public}d %{public}s', err.code, err.message);
       await PreferencesUtil.setVpnActive(false);
-      this.context.terminateSelf();
     }
   }
 
