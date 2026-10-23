@@ -2,6 +2,7 @@ import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { AppSettings, ProxyMode, createDefaultSettings, modeLabel } from '../model/Types';
 import { PreferencesUtil } from '../utils/PreferencesUtil';
+import { ClashApi } from '../utils/ClashApi';
 import { defaultRuleList } from '../utils/ConfigBuilder';
 
 @Entry
@@ -10,6 +11,7 @@ struct RulesPage {
   @State mode: string = ProxyMode.RULE;
   private settings: AppSettings = createDefaultSettings();
   private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+  private controllerSecret: string = '';
 
   aboutToAppear(): void {
     this.loadState();
@@ -19,12 +21,21 @@ struct RulesPage {
     await PreferencesUtil.init(this.context);
     this.settings = await PreferencesUtil.loadSettings();
     this.mode = this.settings.mode;
+    this.controllerSecret = await PreferencesUtil.ensureControllerSecret();
   }
 
   private async changeMode(value: string): Promise<void> {
     this.mode = value;
     this.settings.mode = value;
     await PreferencesUtil.saveSettings(this.settings);
+    if (await ClashApi.ping(this.controllerSecret)) {
+      try {
+        await ClashApi.setMode(this.controllerSecret, value);
+        promptAction.showToast({ message: '已切换为' + modeLabel(value) + '模式，立即生效' });
+        return;
+      } catch (error) {
+      }
+    }
     promptAction.showToast({ message: '已切换为' + modeLabel(value) + '模式，重连后生效' });
   }
 
@@ -126,7 +137,7 @@ struct RulesPage {
           .backgroundColor('#161B22')
           .borderRadius(10)
 
-          Text('说明：当前版本的规则由本地生成，订阅自带的完整规则集将在集成 Mihomo 核心后支持。')
+          Text('说明：规则由本地生成（私有网段直连 + 其余走代理）。订阅自带规则集与 GEOIP 分流将在后续版本支持。')
             .fontSize(11)
             .fontColor('#484F58')
             .width('100%')

@@ -5,7 +5,8 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { AppSettings, ProxyMode, Subscription, createDefaultSettings, modeLabel } from '../model/Types';
 import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { buildRuntimeConfig } from '../utils/ConfigBuilder';
-import { BUNDLE_NAME, VPN_EXTENSION_NAME } from '../common/Constants';
+import { ClashApi, TrafficMonitor, formatBytes } from '../utils/ClashApi';
+import { BUNDLE_NAME, DEFAULT_CONTROLLER_PORT, VPN_EXTENSION_NAME } from '../common/Constants';
 
 @Entry
 @Component
@@ -16,8 +17,13 @@ struct Index {
   @State selectedNode: string = '';
   @State subCount: number = 0;
   @State nodeCount: number = 0;
+  @State uploadText: string = '0 B/s';
+  @State downloadText: string = '0 B/s';
+  @State coreVersion: string = '';
   private settings: AppSettings = createDefaultSettings();
   private context: common.UIAbilityContext = getContext(this) as common.UIAbilityContext;
+  private controllerSecret: string = '';
+  private trafficMonitor: TrafficMonitor | undefined = undefined;
 
   aboutToAppear(): void {
     this.initState();
@@ -27,12 +33,25 @@ struct Index {
     this.refreshSummary();
   }
 
+  aboutToDisappear(): void {
+    this.stopTrafficMonitor();
+  }
+
   private async initState(): Promise<void> {
     await PreferencesUtil.init(this.context);
     this.settings = await PreferencesUtil.loadSettings();
     this.mode = this.settings.mode;
-    this.connected = await PreferencesUtil.isVpnActive();
+    this.controllerSecret = await PreferencesUtil.ensureControllerSecret();
     await this.refreshSummary();
+    const reachable = await ClashApi.ping(this.controllerSecret);
+    if (reachable) {
+      this.connected = true;
+      await PreferencesUtil.setVpnActive(true);
+      this.startTrafficMonitor();
+      this.refreshCoreVersion();
+    } else {
+      this.connected = false;
+    }
   }
 
   private async refreshSummary(): Promise<void> {
@@ -84,8 +103,42 @@ struct Index {
     this.settings.mode = value;
     PreferencesUtil.saveSettings(this.settings);
     if (this.connected) {
-      promptAction.showToast({ message: '模式已保存，重连后生效' });
+      ClashApi.setMode(this.controllerSecret, value).then(() => {
+        promptAction.showToast({ message: '已切换为' + modeLabel(value) + '模式' });
+      }).catch(() => {
+        promptAction.showToast({ message: '模式已保存，重连后生效' });
+      });
+    } else {
+      promptAction.showToast({ message: '模式已保存' });
     }
+  }
+
+  private startTrafficMonitor(): void {
+    this.stopTrafficMonitor();
+    this.trafficMonitor = new TrafficMonitor((up: number, down: number) => {
+      this.uploadText = formatBytes(up) + '/s';
+      this.downloadText = formatBytes(down) + '/s';
+    });
+    this.trafficMonitor.connect(this.controllerSecret);
+  }
+
+  private stopTrafficMonitor(): void {
+    if (this.trafficMonitor !== undefined) {
+      this.trafficMonitor.close();
+      this.trafficMonitor = undefined;
+    }
+  }
+
+  private refreshCoreVersion(attempt: number = 0): void {
+    ClashApi.version(this.controllerSecret).then((version: string) => {
+      this.coreVersion = version;
+    }).catch(() => {
+      if (attempt < 10) {
+        setTimeout(() => {
+          this.refreshCoreVersion(attempt + 1);
+        }, 2000);
+      }
+    });
   }
 
   private async toggleVpn(): Promise<void> {
@@ -99,9 +152,13 @@ struct Index {
     };
     try {
       if (this.connected) {
+        this.stopTrafficMonitor();
         await vpnExtension.stopVpnExtensionAbility(want);
         this.connected = false;
         await PreferencesUtil.setVpnActive(false);
+        this.uploadText = '0 B/s';
+        this.downloadText = '0 B/s';
+        this.coreVersion = '';
         promptAction.showToast({ message: '已断开连接' });
         return;
       }
@@ -112,14 +169,18 @@ struct Index {
         promptAction.showToast({ message: '请先添加订阅' });
         return;
       }
+      this.controllerSecret = await PreferencesUtil.ensureControllerSecret();
       const runtimeConfig = buildRuntimeConfig(active.rawConfig, this.settings.mode, this.settings.selectedNode,
-        this.settings.mixedPort, this.settings.allowLan, this.settings.ipv6);
+        this.settings.mixedPort, this.settings.allowLan, this.settings.ipv6, DEFAULT_CONTROLLER_PORT,
+        this.controllerSecret);
       await PreferencesUtil.saveRuntimeConfig(runtimeConfig);
       await PreferencesUtil.setVpnActive(false);
 
       await vpnExtension.startVpnExtensionAbility(want);
       this.connected = true;
       await PreferencesUtil.setVpnActive(true);
+      this.startTrafficMonitor();
+      this.refreshCoreVersion();
       promptAction.showToast({ message: 'VPN 已启动' });
     } catch (error) {
       const err = error as BusinessError;
@@ -253,12 +314,12 @@ struct Index {
       .borderRadius(12)
 
       Row() {
-        this.StatItem('上传', '0 B')
+        this.StatItem('上传', this.uploadText)
         Divider()
           .vertical(true)
           .height(28)
           .color('#30363D')
-        this.StatItem('下载', '0 B')
+        this.StatItem('下载', this.downloadText)
         Divider()
           .vertical(true)
           .height(28)
@@ -285,7 +346,7 @@ struct Index {
       .backgroundColor('#161B22')
       .borderRadius(12)
 
-      Text('核心：Mihomo（尚未集成）')
+      Text(this.coreVersion === '' ? '核心：Mihomo' : '核心：Mihomo v' + this.coreVersion)
         .fontSize(11)
         .fontColor('#484F58')
         .margin({ top: 16 })

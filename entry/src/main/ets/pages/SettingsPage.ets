@@ -94,7 +94,7 @@ struct SettingsPage {
 
       Scroll() {
         Column() {
-          this.SwitchRow('允许局域网连接', '允许同一局域网内的设备使用代理（需核心支持）', 'allowLan', this.allowLan)
+          this.SwitchRow('允许局域网连接', '允许同一局域网内的设备使用代理', 'allowLan', this.allowLan)
 
           this.SwitchRow('IPv6', '在代理配置中启用 IPv6 支持', 'ipv6', this.ipv6)
 
@@ -151,7 +151,7 @@ struct SettingsPage {
               .fontColor('#8B949E')
               .width('100%')
               .margin({ top: 8 })
-            Text('代理核心：Mihomo（尚未集成）')
+            Text('代理核心：Mihomo（内置，连接 VPN 后自动运行）')
               .fontSize(12)
               .fontColor('#8B949E')
               .width('100%')

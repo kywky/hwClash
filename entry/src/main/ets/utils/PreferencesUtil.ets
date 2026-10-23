@@ -1,8 +1,10 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
+import { util } from '@kit.ArkTS';
 import { AppSettings, ProxyMode, Subscription, createDefaultSettings } from '../model/Types';
 import {
   DEFAULT_MIXED_PORT,
+  KEY_CONTROLLER_SECRET,
   KEY_RUNTIME_CONFIG,
   KEY_SETTINGS,
   KEY_SUBSCRIPTIONS,
@@ -82,6 +84,17 @@ export class PreferencesUtil {
     return await store.get(KEY_RUNTIME_CONFIG, '') as string;
   }
 
+  static async loadControllerSecret(): Promise<string> {
+    const store = await PreferencesUtil.ensureStore();
+    return await store.get(KEY_CONTROLLER_SECRET, '') as string;
+  }
+
+  static async saveControllerSecret(secret: string): Promise<void> {
+    const store = await PreferencesUtil.ensureStore();
+    await store.put(KEY_CONTROLLER_SECRET, secret);
+    await store.flush();
+  }
+
   static async setVpnActive(active: boolean): Promise<void> {
     const store = await PreferencesUtil.ensureStore();
     await store.put(KEY_VPN_ACTIVE, active);
@@ -91,5 +104,16 @@ export class PreferencesUtil {
   static async isVpnActive(): Promise<boolean> {
     const store = await PreferencesUtil.ensureStore();
     return await store.get(KEY_VPN_ACTIVE, false) as boolean;
+  }
+
+  static async ensureControllerSecret(): Promise<string> {
+    const store = await PreferencesUtil.ensureStore();
+    let secret = await store.get(KEY_CONTROLLER_SECRET, '') as string;
+    if (secret === '') {
+      secret = util.generateRandomUUID(false);
+      await store.put(KEY_CONTROLLER_SECRET, secret);
+      await store.flush();
+    }
+    return secret;
   }
 }

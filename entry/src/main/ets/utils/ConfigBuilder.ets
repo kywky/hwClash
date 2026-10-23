@@ -8,7 +8,10 @@ const TOP_LEVEL_OVERRIDE_KEYS: string[] = [
   'allow-lan',
   'mode',
   'log-level',
-  'ipv6'
+  'ipv6',
+  'external-controller',
+  'secret',
+  'dns'
 ];
 
 export function decodeSubscription(raw: string): string {
@@ -153,31 +156,58 @@ export function defaultRuleList(): string[] {
     'IP-CIDR,10.0.0.0/8,DIRECT,no-resolve',
     'IP-CIDR,172.16.0.0/12,DIRECT,no-resolve',
     'IP-CIDR,192.168.0.0/16,DIRECT,no-resolve',
-    'GEOIP,CN,DIRECT',
     'MATCH,PROXY'
   ];
 }
 
+function dnsBlock(ipv6: boolean): string[] {
+  return [
+    'dns:',
+    '  enable: true',
+    '  ipv6: ' + (ipv6 ? 'true' : 'false'),
+    '  listen: 0.0.0.0:1053',
+    '  enhanced-mode: fake-ip',
+    '  fake-ip-range: 198.18.0.1/16',
+    '  fake-ip-filter:',
+    '    - "*.lan"',
+    '    - "*.local"',
+    '    - "localhost.ptlogin2.qq.com"',
+    '  default-nameserver:',
+    '    - 223.5.5.5',
+    '    - 119.29.29.29',
+    '  nameserver:',
+    '    - 223.5.5.5',
+    '    - 119.29.29.29'
+  ];
+}
+
 export function buildRuntimeConfig(rawConfig: string, mode: string, selectedNode: string, port: number,
-  allowLan: boolean, ipv6: boolean): string {
+  allowLan: boolean, ipv6: boolean, controllerPort: number, secret: string): string {
   const decoded = decodeSubscription(rawConfig);
   const overrides: string[] = [
     'mixed-port: ' + port.toString(),
     'allow-lan: ' + (allowLan ? 'true' : 'false'),
-    'mode: rule',
+    'mode: ' + mode,
     'log-level: info',
-    'ipv6: ' + (ipv6 ? 'true' : 'false')
+    'ipv6: ' + (ipv6 ? 'true' : 'false'),
+    'external-controller: 127.0.0.1:' + controllerPort.toString(),
+    'secret: ' + yamlQuote(secret)
   ];
+  const dns = dnsBlock(ipv6);
   const proxiesBlock = extractSection(decoded, 'proxies');
   const nodes = extractNodes(decoded);
 
   if (proxiesBlock === '' || nodes.length === 0) {
     const stripped = stripTopLevelKeys(decoded, TOP_LEVEL_OVERRIDE_KEYS);
-    return overrides.join('\n') + '\n' + stripped;
+    return overrides.join('\n') + '\n' + dns.join('\n') + '\n' + stripped;
   }
 
   const lines: string[] = [];
   for (const line of overrides) {
+    lines.push(line);
+  }
+  lines.push('');
+  for (const line of dns) {
     lines.push(line);
   }
   lines.push('');

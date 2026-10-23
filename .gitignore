@@ -9,6 +9,11 @@ oh_modules/
 entry/oh_modules/
 oh-package-lock.json5
 
+# Go core build outputs (produced by core/build.sh)
+core/libhwclash.so
+core/libhwclash.h
+entry/libs/
+
 # IDE
 .idea/
 .vscode/

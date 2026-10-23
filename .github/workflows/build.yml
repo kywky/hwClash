@@ -13,7 +13,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,6 +35,48 @@ jobs:
           hvigorw -v || true
           ohpm --version || true
           node --version
+
+      - name: Set up bootstrap Go for OHOS toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.12'
+          cache: false
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('core/go.sum') }}
+          restore-keys: go-mod-
+
+      - name: Test Go core (host)
+        run: |
+          export GOPROXY=https://goproxy.cn,direct
+          cd core
+          go test -tags with_gvisor ./...
+
+      - name: Cache OHOS Go toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/go-ohos
+          key: go-ohos-${{ runner.os }}-${{ runner.arch }}-wefuture-tlsgd-v2
+
+      - name: Build OHOS Go toolchain
+        run: |
+          if [ ! -x "$HOME/go-ohos/bin/go" ]; then
+            git clone --depth 1 -b feature/tlsgd_mode_support \
+              https://gitee.com/wefuture/golang_go.git "$RUNNER_TEMP/go-ohos-src"
+            (cd "$RUNNER_TEMP/go-ohos-src/src" && GOROOT_BOOTSTRAP="$(go env GOROOT)" ./make.bash)
+            mv "$RUNNER_TEMP/go-ohos-src" "$HOME/go-ohos"
+          fi
+          "$HOME/go-ohos/bin/go" version
+
+      - name: Build Go proxy core
+        run: |
+          export GO_OHOS="$HOME/go-ohos/bin/go"
+          export OHOS_NATIVE_HOME="${OHOS_NDK_HOME:-$HOME/ohos-sdk/command-line-tools/sdk/default/openharmony}/native"
+          export GOPROXY=https://goproxy.cn,direct
+          ./core/build.sh
 
       - name: Install dependencies
         run: ohpm install --all
