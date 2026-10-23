@@ -1,0 +1,6 @@
+{
+  "modelVersion": "6.0.0",
+  "description": "hwClash - a Clash client for HarmonyOS NEXT",
+  "dependencies": {},
+  "devDependencies": {}
+}

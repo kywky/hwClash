@@ -1,0 +1,23 @@
+# hvigor / build outputs
+.hvigor/
+entry/.preview/
+entry/build/
+build/
+
+# dependencies
+oh_modules/
+entry/oh_modules/
+oh-package-lock.json5
+
+# IDE
+.idea/
+.vscode/
+*.iml
+local.properties
+
+# signing materials - never commit these
+*.p12
+*.cer
+*.p7b
+*.pem
+signing/

@@ -1,0 +1,57 @@
+name: Build HAP
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up HarmonyOS toolchain
+        uses: ErBWs/setup-ohos@v2
+        with:
+          version: 6.0.0.858
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev
+
+      - name: Show toolchain versions
+        run: |
+          which hvigorw || true
+          hvigorw -v || true
+          ohpm --version || true
+          node --version
+
+      - name: Install dependencies
+        run: ohpm install --all
+
+      - name: Build HAP
+        run: |
+          hvigorw --mode module \
+            -p product=default \
+            -p module=entry@default \
+            -p buildMode=release \
+            assembleHap \
+            --analyze=normal --parallel --incremental --no-daemon
+
+      - name: Upload HAP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hwclash-hap
+          path: entry/build/default/outputs/default/*.hap
+          if-no-files-found: error
+          retention-days: 14

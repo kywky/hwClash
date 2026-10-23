@@ -1,0 +1,20 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "hwClash main module"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "hwClash"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "hwClash"
+    },
+    {
+      "name": "vpn_extension_desc",
+      "value": "hwClash VPN service"
+    }
+  ]
+}
