@@ -99,7 +99,7 @@ export default class HwClashVpnExtension extends VpnExtensionAbility {
       {
         interface: 'vpn-tun',
         destination: { address: { address: '0.0.0.0', family: 1 }, prefixLength: 0 },
-        gateway: { address: { address: '0.0.0.0', family: 1 } },
+        gateway: { address: '0.0.0.0', family: 1 },
         hasGateway: false,
         isDefaultRoute: true
       }
@@ -113,7 +113,7 @@ export default class HwClashVpnExtension extends VpnExtensionAbility {
       routes.push({
         interface: 'vpn-tun',
         destination: { address: { address: '::', family: 2 }, prefixLength: 0 },
-        gateway: { address: { address: '::', family: 2 } },
+        gateway: { address: '::', family: 2 },
         hasGateway: false,
         isDefaultRoute: true
       });

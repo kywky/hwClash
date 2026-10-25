@@ -46,9 +46,10 @@ export class ClashApi {
     return info.version;
   }
 
-  static async setMode(secret: string, mode: string): Promise<void> {
-    await ClashApi.request(secret, '/configs', http.RequestMethod.PATCH,
-      JSON.stringify({ mode: mode }));
+  static async setMode(secret: string, mode: string, runtimeConfig: string): Promise<void> {
+    const updated = runtimeConfig.replace(/^mode: .*$/m, 'mode: ' + mode);
+    await ClashApi.request(secret, '/configs?force=true', http.RequestMethod.PUT,
+      JSON.stringify({ payload: updated }));
   }
 
   static async selectProxy(secret: string, group: string, name: string): Promise<void> {

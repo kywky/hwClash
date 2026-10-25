@@ -30,7 +30,11 @@ struct RulesPage {
     await PreferencesUtil.saveSettings(this.settings);
     if (await ClashApi.ping(this.controllerSecret)) {
       try {
-        await ClashApi.setMode(this.controllerSecret, value);
+        const runtimeConfig = await PreferencesUtil.loadRuntimeConfig();
+        await ClashApi.setMode(this.controllerSecret, value, runtimeConfig);
+        if (this.settings.selectedNode !== '') {
+          await ClashApi.selectProxy(this.controllerSecret, 'PROXY', this.settings.selectedNode);
+        }
         promptAction.showToast({ message: '已切换为' + modeLabel(value) + '模式，立即生效' });
         return;
       } catch (error) {

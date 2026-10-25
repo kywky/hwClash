@@ -95,19 +95,24 @@ struct Index {
     return modeLabel(this.mode);
   }
 
-  private changeMode(value: string): void {
+  private async changeMode(value: string): Promise<void> {
     if (this.mode === value) {
       return;
     }
     this.mode = value;
     this.settings.mode = value;
-    PreferencesUtil.saveSettings(this.settings);
+    await PreferencesUtil.saveSettings(this.settings);
     if (this.connected) {
-      ClashApi.setMode(this.controllerSecret, value).then(() => {
+      try {
+        const runtimeConfig = await PreferencesUtil.loadRuntimeConfig();
+        await ClashApi.setMode(this.controllerSecret, value, runtimeConfig);
+        if (this.selectedNode !== '') {
+          await ClashApi.selectProxy(this.controllerSecret, 'PROXY', this.selectedNode);
+        }
         promptAction.showToast({ message: '已切换为' + modeLabel(value) + '模式' });
-      }).catch(() => {
+      } catch (error) {
         promptAction.showToast({ message: '模式已保存，重连后生效' });
-      });
+      }
     } else {
       promptAction.showToast({ message: '模式已保存' });
     }
