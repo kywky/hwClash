@@ -98,45 +98,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Check signing secrets
+      - name: Check signing secret
         id: signcheck
         env:
-          HAS_P12: ${{ secrets.HWCLASH_P12 != '' }}
-          HAS_CER: ${{ secrets.HWCLASH_CER != '' }}
-          HAS_P7B: ${{ secrets.HWCLASH_P7B != '' }}
-          HAS_PWD: ${{ secrets.HWCLASH_KEYSTORE_PWD != '' }}
+          HAS_BUNDLE: ${{ secrets.HWCLASH_SIGNING_BUNDLE != '' }}
         run: |
-          if [ "$HAS_P12" = "true" ] && [ "$HAS_CER" = "true" ] && [ "$HAS_P7B" = "true" ] && [ "$HAS_PWD" = "true" ]; then
+          if [ "$HAS_BUNDLE" = "true" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Signing secrets not configured, publishing unsigned HAP only."
+            echo "HWCLASH_SIGNING_BUNDLE not configured, publishing unsigned HAP only."
           fi
+
+      - name: Set up Java for signing
+        if: ${{ steps.signcheck.outputs.enabled == 'true' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Sign HAP
         if: ${{ steps.signcheck.outputs.enabled == 'true' }}
         env:
-          HWCLASH_P12: ${{ secrets.HWCLASH_P12 }}
-          HWCLASH_CER: ${{ secrets.HWCLASH_CER }}
-          HWCLASH_P7B: ${{ secrets.HWCLASH_P7B }}
-          HWCLASH_KEYSTORE_PWD: ${{ secrets.HWCLASH_KEYSTORE_PWD }}
+          SIGNING_BUNDLE: ${{ secrets.HWCLASH_SIGNING_BUNDLE }}
         run: |
           git clone --depth 1 https://github.com/openharmony/developtools_hapsigner.git "$RUNNER_TEMP/hapsigner"
           SIGNTOOL="$RUNNER_TEMP/hapsigner/dist/hap-sign-tool.jar"
-          echo "$HWCLASH_P12" | base64 -d > "$RUNNER_TEMP/hwclash.p12"
-          echo "$HWCLASH_CER" | base64 -d > "$RUNNER_TEMP/hwclash.cer"
-          echo "$HWCLASH_P7B" | base64 -d > "$RUNNER_TEMP/hwclash.p7b"
+          printf '%s' "$SIGNING_BUNDLE" | base64 -d > "$RUNNER_TEMP/bundle.tar.gz"
+          mkdir -p "$RUNNER_TEMP/signing"
+          tar xzf "$RUNNER_TEMP/bundle.tar.gz" -C "$RUNNER_TEMP/signing"
           java -jar "$SIGNTOOL" sign-app \
             -keyAlias "hwclash-debug" \
             -signAlg "SHA256withECDSA" \
             -mode "localSign" \
-            -appCertFile "$RUNNER_TEMP/hwclash.cer" \
-            -profileFile "$RUNNER_TEMP/hwclash.p7b" \
-            -keystoreFile "$RUNNER_TEMP/hwclash.p12" \
-            -keystorePwd "$HWCLASH_KEYSTORE_PWD" \
+            -appCertFile "$RUNNER_TEMP/signing/tools.cer" \
+            -profileFile "$RUNNER_TEMP/signing/toolsRelease.p7b" \
+            -keystoreFile "$RUNNER_TEMP/signing/hwclash.p12" \
+            -keystorePwd "$(cat "$RUNNER_TEMP/signing/keystore.password")" \
             -inFile entry/build/default/outputs/default/entry-default-unsigned.hap \
             -outFile entry/build/default/outputs/default/hwclash-signed.hap
-          rm -f "$RUNNER_TEMP/hwclash.p12" "$RUNNER_TEMP/hwclash.cer" "$RUNNER_TEMP/hwclash.p7b"
+          rm -rf "$RUNNER_TEMP/signing" "$RUNNER_TEMP/bundle.tar.gz"
 
       - name: Upload signed HAP artifact
         if: ${{ steps.signcheck.outputs.enabled == 'true' }}
