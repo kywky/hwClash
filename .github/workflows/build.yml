@@ -117,7 +117,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Sign HAP
+      - name: Sign HAP and build signed APP
         if: ${{ steps.signcheck.outputs.enabled == 'true' }}
         env:
           SIGNING_BUNDLE: ${{ secrets.HWCLASH_SIGNING_BUNDLE }}
@@ -127,6 +127,9 @@ jobs:
           printf '%s' "$SIGNING_BUNDLE" | base64 -d > "$RUNNER_TEMP/bundle.tar.gz"
           mkdir -p "$RUNNER_TEMP/signing"
           tar xzf "$RUNNER_TEMP/bundle.tar.gz" -C "$RUNNER_TEMP/signing"
+          STORE_PWD="$(cat "$RUNNER_TEMP/signing/keystore.password")"
+
+          # 1. Sign the HAP (for direct side-loading).
           java -jar "$SIGNTOOL" sign-app \
             -keyAlias "hwclash-debug" \
             -signAlg "SHA256withECDSA" \
@@ -134,16 +137,41 @@ jobs:
             -appCertFile "$RUNNER_TEMP/signing/tools.cer" \
             -profileFile "$RUNNER_TEMP/signing/toolsRelease.p7b" \
             -keystoreFile "$RUNNER_TEMP/signing/hwclash.p12" \
-            -keystorePwd "$(cat "$RUNNER_TEMP/signing/keystore.password")" \
+            -keystorePwd "$STORE_PWD" \
             -inFile entry/build/default/outputs/default/entry-default-unsigned.hap \
             -outFile entry/build/default/outputs/default/hwclash-signed.hap
-          rm -rf "$RUNNER_TEMP/signing" "$RUNNER_TEMP/bundle.tar.gz"
 
-      - name: Upload signed HAP artifact
+          # 2. Repack the App Pack with the signed HAP, then sign the .app
+          #    (AppGallery Connect requires the .app, not a bare HAP).
+          hvigorw --mode project -p product=default -p buildMode=release assembleApp --no-daemon
+          cp entry/build/default/outputs/default/hwclash-signed.hap "$RUNNER_TEMP/entry-default.hap"
+          cp build/outputs/default/hwClash-default-unsigned.app "$RUNNER_TEMP/hwclash-repack.app"
+          (cd "$RUNNER_TEMP" && zip -q hwclash-repack.app entry-default.hap)
+          java -jar "$SIGNTOOL" sign-app \
+            -keyAlias "hwclash-debug" \
+            -signAlg "SHA256withECDSA" \
+            -mode "localSign" \
+            -appCertFile "$RUNNER_TEMP/signing/tools.cer" \
+            -profileFile "$RUNNER_TEMP/signing/toolsRelease.p7b" \
+            -keystoreFile "$RUNNER_TEMP/signing/hwclash.p12" \
+            -keystorePwd "$STORE_PWD" \
+            -inForm "zip" \
+            -inFile "$RUNNER_TEMP/hwclash-repack.app" \
+            -outFile build/outputs/default/hwClash-signed.app
+          java -jar "$SIGNTOOL" verify-app \
+            -inFile build/outputs/default/hwClash-signed.app \
+            -outCertChain "$RUNNER_TEMP/verify.cer" \
+            -outProfile "$RUNNER_TEMP/verify.p7b"
+          rm -rf "$RUNNER_TEMP/signing" "$RUNNER_TEMP/bundle.tar.gz" "$RUNNER_TEMP/entry-default.hap" \
+            "$RUNNER_TEMP/hwclash-repack.app" "$RUNNER_TEMP/verify.cer" "$RUNNER_TEMP/verify.p7b"
+
+      - name: Upload signed artifacts
         if: ${{ steps.signcheck.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: hwclash-hap-signed
-          path: entry/build/default/outputs/default/hwclash-signed.hap
+          name: hwclash-release
+          path: |
+            entry/build/default/outputs/default/hwclash-signed.hap
+            build/outputs/default/hwClash-signed.app
           if-no-files-found: error
           retention-days: 30
