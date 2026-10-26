@@ -70,12 +70,23 @@ Workflow 使用：
 
 ### 签名与安装
 
-CI 产出的是**未签名** HAP，不能直接安装到真机。两种方式签名：
+CI 默认产出**未签名** HAP。配置一个仓库 Secret 后，CI 会自动输出**已签名** HAP（`hwclash-hap-signed` 产物）：
 
-1. **DevEco Studio（推荐）**：用 DevEco Studio 6.0.0 打开项目，`File > Project Structure > Signing Configs` 勾选自动签名（需登录华为开发者账号），再运行到真机。
-2. **命令行**：准备 `.p12` / `.cer` / `.p7b`，使用 DevEco 工具链中的 `hap-sign-tool` 对 HAP 签名。证书文件不要提交进仓库。
+- Secret 名：`HWCLASH_SIGNING_BUNDLE`
+- 值：`tar.gz`（含 `hwclash.p12` / `tools.cer` / `toolsRelease.p7b` / `keystore.password`）的 base64
+- 签名工具：[OpenHarmony developtools_hapsigner](https://github.com/openharmony/developtools_hapsigner)（构建时自动拉取）
 
-如果要在 CI 里自动签名，可以把证书内容存为 GitHub Secrets，在构建后新增签名步骤（注意 `.gitignore` 已排除证书文件）。
+本地签名（代替 DevEco）：
+
+```sh
+java -jar hap-sign-tool.jar sign-app \
+  -keyAlias hwclash-debug -signAlg SHA256withECDSA -mode localSign \
+  -appCertFile tools.cer -profileFile toolsRelease.p7b \
+  -keystoreFile hwclash.p12 -keystorePwd "$(cat keystore.password)" \
+  -inFile entry-default-unsigned.hap -outFile hwclash-signed.hap
+```
+
+证书申请：`hap-sign-tool.jar generate-keypair` + `generate-csr` 生成密钥与 CSR → AGC 签发证书与 Profile。证书文件不要提交进仓库。
 
 ## 本地开发
 
